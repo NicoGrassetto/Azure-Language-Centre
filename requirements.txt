@@ -1,0 +1,4 @@
+azure-ai-textanalytics==6.0.0b2
+azure-identity>=1.13,<2
+ipykernel
+jupyterlab

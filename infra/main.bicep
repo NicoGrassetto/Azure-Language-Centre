@@ -5,13 +5,7 @@ targetScope = 'subscription'
 @maxLength(64)
 param environmentName string
 
-@description('Deployment region from a curated shortlist; verify feature availability and live capacity.')
-@allowed([
-  'swedencentral'
-  'eastus'
-  'westeurope'
-  'northeurope'
-])
+@description('Azure region for the resource group and Language account; verify feature availability and capacity.')
 @metadata({
   azd: {
     type: 'location'
@@ -41,7 +35,6 @@ module language 'br/public:avm/res/cognitive-services/account:0.19.1' = {
     kind: 'TextAnalytics'
     sku: 'S'
     customSubDomainName: languageName
-    // The existing local notebook uses API keys and a public endpoint.
     disableLocalAuth: false
     publicNetworkAccess: 'Enabled'
     networkAcls: {
