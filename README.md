@@ -6,9 +6,29 @@ Practical Python recipes for Azure AI Language, demonstrating the
 `azure-ai-textanalytics` SDK in a [Jupyter notebook](./notebook.ipynb) with realistic
 examples and detailed result output.
 
+> [!WARNING]
+> **Deprecated features and pinned API version**
+>
+> The [notebook](./notebook.ipynb) explicitly targets Azure Language API
+> **`2023-04-01`** (`api_version="2023-04-01"`), not the latest API version.
+> Several features demonstrated here are scheduled for retirement:
+>
+> - [Entity linking](https://learn.microsoft.com/en-us/azure/ai-services/language-service/entity-linking/overview)
+>   retires on **September 1, 2028**.
+> - [Sentiment analysis and opinion mining](https://learn.microsoft.com/en-us/azure/ai-services/language-service/sentiment-opinion-mining/overview),
+>   [key phrase extraction](https://learn.microsoft.com/en-us/azure/ai-services/language-service/key-phrase-extraction/overview),
+>   [custom text classification](https://learn.microsoft.com/en-us/azure/ai-services/language-service/custom-text-classification/overview),
+>   and [summarization](https://learn.microsoft.com/en-us/azure/ai-services/language-service/summarization/overview)
+>   (extractive and abstractive) retire on **March 31, 2029**.
+>
+> Pinning an API version does not extend these services' lifetimes. Treat the
+> affected recipes as legacy examples and follow Microsoft's
+> [migration guidance](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/transitioning-from-azure-language-features-to-foundry-models/4524092)
+> for new projects and production workloads.
+
 ## How to deploy
 
-You need an Azure subscription, the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli),
+You need an Azure subscription, the [Azure Developer CLI (`azd`)](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd),
 and permission to create resource groups and Azure Language resources and retrieve
 their keys (for example, the Contributor role on the subscription).
 The commands below use Bash on macOS, Linux, or Windows with WSL.
@@ -18,6 +38,10 @@ Language (`TextAnalytics`) resource on the Standard (`S`) tier, with a public
 endpoint and API-key authentication. API calls can incur charges; use the
 calculator in [Useful links](#useful-links) to estimate costs.
 
+The included [azd project configuration](./azure.yaml) and
+[Bicep parameter file](./infra/main.parameters.json) let you deploy with `azd up`.
+This is an infrastructure-only deployment; the notebook runs locally.
+
 1. Clone the repository and open its root directory, if you have not already:
 
    ```bash
@@ -25,44 +49,40 @@ calculator in [Useful links](#useful-links) to estimate costs.
    cd Azure-Language-Centre
    ```
 
-2. Sign in, select your subscription, install the Bicep CLI, and register the
-   resource provider:
+2. Sign in with `azd` and create a named environment:
 
    ```bash
-   az login
-   az account set --subscription "<subscription-id>"
-   az bicep install
-   az provider register --namespace Microsoft.CognitiveServices --wait
+   azd auth login
+   azd env new dev
    ```
 
-3. Deploy the infrastructure at subscription scope:
+3. Provision the Azure resources:
 
    ```bash
-   ENVIRONMENT_NAME="dev"
-   AZURE_LOCATION="swedencentral"
-   DEPLOYMENT_NAME="language-${ENVIRONMENT_NAME}-${AZURE_LOCATION}"
-
-   az deployment sub create \
-     --name "$DEPLOYMENT_NAME" \
-     --location "$AZURE_LOCATION" \
-     --template-file infra/main.bicep \
-     --parameters environmentName="$ENVIRONMENT_NAME" location="$AZURE_LOCATION"
+   azd up
    ```
 
+   Select your Azure subscription and region when prompted.
    The template accepts `swedencentral`, `eastus`, `westeurope`, or `northeurope`.
    Check that your chosen region supports the features you want to run and has
-   available capacity. Keep the environment name and region unchanged when
-   redeploying to reuse the same resource names.
+   available capacity. `azd` passes the environment name and location into the
+   subscription-scoped Bicep deployment.
 
-   Once deployment succeeds, its outputs include the resource group, Language
-   account name, and endpoint. The API key is retrieved separately in the next
-   section; it is not exposed as a deployment output.
+   Once deployment succeeds, `azd` saves the resource group, Language account
+   name, and endpoint in the selected environment under `.azure/`, which is
+   ignored by Git. The API key is retrieved separately in the next section; it
+   is not exposed as a deployment output.
+
+To deploy changes later, select the same environment with `azd env select dev`
+and run `azd up` again. Keep the environment name, subscription, and region
+unchanged to reuse the same resource names.
 
 ## How to run
 
-Install a recent Python 3 version with `venv` and `pip`, and complete the deployment
-above. Run these commands locally from the repository root, using the same Azure
-subscription as the deployment.
+Install a recent Python 3 version with `venv` and `pip`, plus the
+[Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) to retrieve
+the resource's API key, and complete the deployment above. Run these commands
+locally from the repository root.
 
 1. Create and activate a virtual environment:
 
@@ -88,21 +108,19 @@ subscription as the deployment.
    The SDK is kept on the 5.x line because the notebook uses `TextAnalyticsClient`
    with service API version `2023-04-01`.
 
-3. Load the endpoint and API key into the current terminal's environment. Adjust
-   the deployment name if you changed the values in the deployment example:
+3. Select your `azd` environment and load the endpoint and API key into the
+   current terminal's environment. Replace `dev` if you chose a different
+   environment name. The Azure CLI authenticates separately from `azd`; select
+   the subscription stored in the `azd` environment before retrieving the key:
 
    ```bash
-   DEPLOYMENT_NAME="language-dev-swedencentral"
+   azd env select dev
+   az login
+   az account set --subscription "$(azd env get-value AZURE_SUBSCRIPTION_ID)"
 
-   AZURE_RESOURCE_GROUP="$(az deployment sub show \
-     --name "$DEPLOYMENT_NAME" \
-     --query properties.outputs.AZURE_RESOURCE_GROUP.value --output tsv)"
-   AZURE_LANGUAGE_NAME="$(az deployment sub show \
-     --name "$DEPLOYMENT_NAME" \
-     --query properties.outputs.AZURE_LANGUAGE_NAME.value --output tsv)"
-   AZURE_LANGUAGE_ENDPOINT="$(az deployment sub show \
-     --name "$DEPLOYMENT_NAME" \
-     --query properties.outputs.AZURE_LANGUAGE_ENDPOINT.value --output tsv)"
+   AZURE_RESOURCE_GROUP="$(azd env get-value AZURE_RESOURCE_GROUP)"
+   AZURE_LANGUAGE_NAME="$(azd env get-value AZURE_LANGUAGE_NAME)"
+   AZURE_LANGUAGE_ENDPOINT="$(azd env get-value AZURE_LANGUAGE_ENDPOINT)"
    AZURE_LANGUAGE_KEY="$(az cognitiveservices account keys list \
      --resource-group "$AZURE_RESOURCE_GROUP" \
      --name "$AZURE_LANGUAGE_NAME" \
